@@ -1,7 +1,48 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeBoard, reveal, flag } from './game.ts';
+import { makeBoard, reveal, flag, canChord } from './game.ts';
 for (const shape of ['torus', 'icosahedron']) {
+  const chordBoard = () => {
+    const b = makeBoard(shape, 0.14);
+    b.status = 'playing';
+    b.cells[0].revealed = true;
+    b.cells[b.cells[0].neighbors[0]].mine = true;
+    b.mines = 1;
+    b.cells.forEach(c => c.count = c.neighbors.filter(n => b.cells[n].mine).length);
+    return b;
+  };
+  test(`${shape}: chord requires exact flags and updates eligibility immediately`, () => {
+    const b = chordBoard(), [mine, safe] = b.cells[0].neighbors;
+    assert.equal(canChord(b, 0), false);
+    let snapshot = JSON.stringify(b);
+    reveal(b, 0);
+    assert.equal(JSON.stringify(b), snapshot);
+    flag(b, mine);
+    assert.equal(canChord(b, 0), true);
+    flag(b, safe);
+    assert.equal(canChord(b, 0), false);
+    snapshot = JSON.stringify(b);
+    reveal(b, 0);
+    assert.equal(JSON.stringify(b), snapshot);
+    flag(b, safe);
+    assert.equal(canChord(b, 0), true);
+    reveal(b, 0);
+    assert.ok(b.cells[0].neighbors.every(n => b.cells[n].flagged || b.cells[n].revealed));
+    assert.ok(b.cells[mine].flagged && !b.cells[mine].revealed);
+    assert.equal(b.status, 'won');
+    assert.equal(canChord(b, 0), false);
+  });
+  test(`${shape}: matching but misplaced flags lose, preserving flags and opening safe neighbors`, () => {
+    const b = chordBoard(), [mine, safe] = b.cells[0].neighbors;
+    flag(b, safe);
+    assert.equal(canChord(b, 0), true);
+    reveal(b, 0);
+    assert.equal(b.status, 'lost');
+    assert.ok(b.cells[mine].revealed);
+    assert.ok(b.cells[safe].flagged && !b.cells[safe].revealed);
+    assert.ok(b.cells[0].neighbors.every(n => b.cells[n].flagged || b.cells[n].revealed));
+    assert.equal(canChord(b, 0), false);
+  });
   test(`${shape}: closed mesh, symmetric adjacency, and equilateral triangles`, () => {
     const b = makeBoard(shape, 0.14);
     assert.equal(b.cells.length, shape === 'torus' ? 288 : 320);

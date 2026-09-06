@@ -118,13 +118,18 @@ export function flag(b: Board, id: number) {
   if (!['ready', 'playing'].includes(b.status) || b.cells[id].revealed) return;
   b.cells[id].flagged = !b.cells[id].flagged;
 }
+export function canChord(b: Board, id: number) {
+  const c = b.cells[id];
+  return b.status === 'playing' && c.revealed && !c.mine && c.count > 0 &&
+    c.neighbors.filter((n) => b.cells[n].flagged).length === c.count;
+}
 export function reveal(b: Board, id: number, rng = Math.random) {
   if (
     !['ready', 'playing'].includes(b.status) ||
-    b.cells[id].flagged ||
-    b.cells[id].revealed
+    b.cells[id].flagged
   )
     return;
+  if (b.cells[id].revealed && !canChord(b, id)) return;
   if (b.status === 'ready') {
     const safe = new Set([id, ...b.cells[id].neighbors]);
     const pool = b.cells.map((_, i) => i).filter((i) => !safe.has(i));
@@ -139,19 +144,23 @@ export function reveal(b: Board, id: number, rng = Math.random) {
     b.status = 'playing';
     b.started = Date.now();
   }
-  if (b.cells[id].mine) {
-    b.status = 'lost';
-    b.cells.forEach((c) => {
-      if (c.mine) c.revealed = true;
-    });
-    return;
-  }
-  const queue = [id];
+  const targets = b.cells[id].revealed
+    ? b.cells[id].neighbors.filter((n) => !b.cells[n].revealed && !b.cells[n].flagged)
+    : [id];
+  const hitMine = targets.some((n) => b.cells[n].mine);
+  const queue = [...targets];
   while (queue.length) {
     const c = b.cells[queue.pop()!];
     if (c.revealed || c.flagged || c.mine) continue;
     c.revealed = true;
     if (c.count === 0) queue.push(...c.neighbors);
+  }
+  if (hitMine) {
+    b.status = 'lost';
+    b.cells.forEach((c) => {
+      if (c.mine) c.revealed = true;
+    });
+    return;
   }
   if (b.cells.every((c) => c.mine || c.revealed)) b.status = 'won';
 }
