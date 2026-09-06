@@ -79,6 +79,7 @@ export default function Home() {
       for (const f of faces) {
         const c = game.current.cells[f.id];
         const chordReady = canChord(game.current, f.id);
+        const chordHovered = chordReady && f.id === hovered;
         const pts = f.points;
         const light = Math.max(0, Math.min(1, (f.z + 1.5) / 3));
         ctx.beginPath();
@@ -94,7 +95,7 @@ export default function Home() {
             ? '#a6bb73'
             : `hsl(163 ${32 + light * 16}% ${24 + light * 30}%)`;
         if (f.id === hovered && !c.revealed) ctx.fillStyle = '#b6f3ce';
-        if (chordReady) ctx.fillStyle = f.id === hovered ? '#b8e5f5' : '#79b8cc';
+        if (chordHovered) ctx.fillStyle = '#b8e5f5';
         ctx.fill();
         ctx.strokeStyle = '#0b211e';
         ctx.lineWidth = 1.4;
@@ -116,7 +117,7 @@ export default function Home() {
             ctx.font = `600 ${Math.max(10, Math.min(23, Math.sqrt(area) * 0.47))}px monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillStyle = chordReady ? '#163641' : c.flagged
+            ctx.fillStyle = chordHovered ? '#163641' : c.flagged
               ? '#193728'
               : ['#e6fff7', '#a7e9ff', '#bce9b0', '#ffca90', '#d8b8ff'][
                   Math.min(c.count, 4)
@@ -420,8 +421,8 @@ export default function Home() {
                 that share an edge or a corner. Empty areas open automatically.
               </p>
               <p>
-                Blue numbers have exactly as many touching flags as their value.
-                Click one to reveal all its unflagged neighbors. Misplaced flags
+                Numbers highlight blue on hover when touching flags match their value.
+                Click to reveal all their unflagged neighbors. Misplaced flags
                 can expose a mine. Too few or too many flags disable this move.
               </p>
               <p>
