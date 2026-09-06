@@ -271,7 +271,7 @@ export default function Home() {
   return (
     <main>
       <header>
-        <a className="brand" href="/">
+        <a className="brand" href="./">
           ◈ <span>SURFACE</span>
           <small>MINESWEEPER / 3D</small>
         </a>
