@@ -1,13 +1,14 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { makeBoard, reveal, flag, canChord, type Board, type Vec } from '@/lib/game';
+import { makeBoard, reveal, flag, canChord, type Board } from '@/lib/game';
+import { initialRotation, rotatePoint, rotateView } from '@/lib/rotation';
 import { registerGameTools } from '@/lib/webmcp';
 
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const game = useRef<Board>(makeBoard('torus', 0.14));
-  const view = useRef({ x: 0.85, y: 0.25, zoom: 1 });
+  const view = useRef({ rotation: initialRotation(), zoom: 1 });
   const [shape, setShape] = useState('torus');
   const [density, setDensity] = useState(0.14);
   const [revision, update] = useState(0);
@@ -44,16 +45,6 @@ export default function Home() {
     const ctx = el.getContext('2d')!;
     let hovered = -1;
     let faces: { id: number; points: number[][]; z: number }[] = [];
-    const rotate = ([x, y, z]: Vec): Vec => {
-      const a = view.current;
-      const xx = x * Math.cos(a.y) + z * Math.sin(a.y),
-        zz = -x * Math.sin(a.y) + z * Math.cos(a.y);
-      return [
-        xx,
-        y * Math.cos(a.x) - zz * Math.sin(a.x),
-        y * Math.sin(a.x) + zz * Math.cos(a.x),
-      ];
-    };
     const draw = () => {
       const w = el.clientWidth,
         h = el.clientHeight,
@@ -65,7 +56,7 @@ export default function Home() {
       const scale = Math.min(w * 0.36, h * 0.36) * view.current.zoom;
       faces = game.current.cells
         .map((c, id) => {
-          const vs = c.vertices.map(rotate);
+          const vs = c.vertices.map((point) => rotatePoint(point, view.current.rotation));
           return {
             id,
             z: vs.reduce((s, p) => s + p[2], 0) / vs.length,
@@ -179,8 +170,11 @@ export default function Home() {
         if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5)
           down.moved = true;
         if (down.moved) {
-          view.current.y += (e.clientX - down.lastX) * 0.008;
-          view.current.x += (e.clientY - down.lastY) * 0.008;
+          view.current.rotation = rotateView(
+            view.current.rotation,
+            (e.clientX - down.lastX) * 0.008,
+            (e.clientY - down.lastY) * 0.008,
+          );
           hovered = -1;
         }
         down.lastX = e.clientX;
@@ -227,10 +221,11 @@ export default function Home() {
         )
       ) {
         e.preventDefault();
-        view.current.y +=
-          e.key === 'ArrowLeft' ? -0.15 : e.key === 'ArrowRight' ? 0.15 : 0;
-        view.current.x +=
-          e.key === 'ArrowUp' ? -0.15 : e.key === 'ArrowDown' ? 0.15 : 0;
+        view.current.rotation = rotateView(
+          view.current.rotation,
+          e.key === 'ArrowLeft' ? -0.15 : e.key === 'ArrowRight' ? 0.15 : 0,
+          e.key === 'ArrowUp' ? -0.15 : e.key === 'ArrowDown' ? 0.15 : 0,
+        );
         if (e.key === '+' || e.key === '-')
           view.current.zoom = Math.max(
             0.55,
@@ -391,7 +386,7 @@ export default function Home() {
             <span>{shape === 'torus' ? '01 / TORUS' : '02 / ICOSAHEDRON'}</span>
             <button
               onClick={() => {
-                view.current = { x: 0.85, y: 0.25, zoom: 1 };
+                view.current = { rotation: initialRotation(), zoom: 1 };
                 drawRef.current();
               }}
             >
