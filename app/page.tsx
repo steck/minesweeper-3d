@@ -3,24 +3,72 @@ import { useEffect, useRef, useState } from 'react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { makeBoard, reveal, flag, canChord, type Board } from '@/lib/game';
 import { initialRotation, rotatePoint, rotateView } from '@/lib/rotation';
+import { createGestures, clampZoom } from '@/lib/gestures';
 import { registerGameTools } from '@/lib/webmcp';
+
+const preferencesKey = 'surface-minesweeper.preferences';
+
+function loadPreferences() {
+  try {
+    const saved = localStorage.getItem(preferencesKey);
+    if (!saved) return null;
+    const preferences = JSON.parse(saved);
+    return {
+      shape: preferences?.shape === 'icosahedron' ? 'icosahedron' : 'torus',
+      density: [0.1, 0.14, 0.2].includes(preferences?.density)
+        ? preferences.density
+        : 0.14,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function savePreferences(shape: string, density: number) {
+  try {
+    localStorage.setItem(preferencesKey, JSON.stringify({ shape, density }));
+  } catch {
+    // The game remains playable if browser storage is unavailable.
+  }
+}
 
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const game = useRef<Board>(makeBoard('torus', 0.14));
+  const session = useRef({ shape: 'torus', density: 0.14 });
   const view = useRef({ rotation: initialRotation(), zoom: 1 });
   const [shape, setShape] = useState('torus');
   const [density, setDensity] = useState(0.14);
   const [revision, update] = useState(0);
   const [seconds, setSeconds] = useState(0);
-  const [mark, setMark] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [step, setStep] = useState(0);
+  const [hasSession, setHasSession] = useState(false);
+  const [hint, setHint] = useState(true);
+  useEffect(() => {
+    const query = matchMedia(
+      '(max-width: 720px), (pointer: coarse) and (max-width: 1100px)',
+    );
+    const sync = () => setMobile(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
   const [help, setHelp] = useState(false);
   const drawRef = useRef<() => void>(() => {});
   const reset = (s = shape, d = density) => {
+    session.current = { shape: s, density: d };
     game.current = makeBoard(s, d);
     setSeconds(0);
     update((v) => v + 1);
   };
+  useEffect(() => {
+    const saved = loadPreferences();
+    if (!saved) return;
+    setShape(saved.shape);
+    setDensity(saved.density);
+    reset(saved.shape, saved.density);
+  }, []);
   useEffect(
     () =>
       registerGameTools(
@@ -56,7 +104,9 @@ export default function Home() {
       const scale = Math.min(w * 0.36, h * 0.36) * view.current.zoom;
       faces = game.current.cells
         .map((c, id) => {
-          const vs = c.vertices.map((point) => rotatePoint(point, view.current.rotation));
+          const vs = c.vertices.map((point) =>
+            rotatePoint(point, view.current.rotation),
+          );
           return {
             id,
             z: vs.reduce((s, p) => s + p[2], 0) / vs.length,
@@ -108,11 +158,13 @@ export default function Home() {
             ctx.font = `600 ${Math.max(10, Math.min(23, Math.sqrt(area) * 0.47))}px monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillStyle = chordHovered ? '#163641' : c.flagged
-              ? '#193728'
-              : ['#e6fff7', '#a7e9ff', '#bce9b0', '#ffca90', '#d8b8ff'][
-                  Math.min(c.count, 4)
-                ];
+            ctx.fillStyle = chordHovered
+              ? '#163641'
+              : c.flagged
+                ? '#193728'
+                : ['#e6fff7', '#a7e9ff', '#bce9b0', '#ffca90', '#d8b8ff'][
+                    Math.min(c.count, 4)
+                  ];
             ctx.fillText(
               c.flagged ? '⚑' : c.mine ? '✹' : String(c.count),
               x,
@@ -140,66 +192,58 @@ export default function Home() {
       }
       return -1;
     };
-    let down: {
-      x: number;
-      y: number;
-      lastX: number;
-      lastY: number;
-      button: number;
-      moved: boolean;
-    } | null = null;
     const pos = (e: PointerEvent) => {
       const r = el.getBoundingClientRect();
       return [e.clientX - r.left, e.clientY - r.top];
     };
+    const gestures = createGestures({
+      hit,
+      reveal: (id) => {
+        reveal(game.current, id);
+        update((v) => v + 1);
+      },
+      flag: (id) => {
+        flag(game.current, id);
+        update((v) => v + 1);
+      },
+      rotate: (dx, dy) => {
+        view.current.rotation = rotateView(
+          view.current.rotation,
+          dx * 0.008,
+          dy * 0.008,
+        );
+      },
+      zoom: (ratio) => {
+        view.current.zoom = clampZoom(view.current.zoom * ratio);
+      },
+    });
     const start = (e: PointerEvent) => {
-      if (down) return;
-      el.focus();
+      el.focus({ preventScroll: true });
       el.setPointerCapture(e.pointerId);
-      down = {
-        x: e.clientX,
-        y: e.clientY,
-        lastX: e.clientX,
-        lastY: e.clientY,
-        button: e.button,
-        moved: false,
-      };
+      const [x, y] = pos(e);
+      gestures.down(e.pointerId, x, y, e.button, e.pointerType !== 'mouse');
+      hovered = -1;
     };
     const move = (e: PointerEvent) => {
-      if (down) {
-        if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5)
-          down.moved = true;
-        if (down.moved) {
-          view.current.rotation = rotateView(
-            view.current.rotation,
-            (e.clientX - down.lastX) * 0.008,
-            (e.clientY - down.lastY) * 0.008,
-          );
-          hovered = -1;
-        }
-        down.lastX = e.clientX;
-        down.lastY = e.clientY;
-      } else {
-        const [x, y] = pos(e);
-        hovered = hit(x, y);
-      }
+      const [x, y] = pos(e);
+      if (gestures.active()) {
+        gestures.move(e.pointerId, x, y);
+        hovered = -1;
+      } else if (e.pointerType === 'mouse') hovered = hit(x, y);
       draw();
     };
     const end = (e: PointerEvent) => {
-      if (down && !down.moved) {
-        const [x, y] = pos(e),
-          id = hit(x, y);
-        if (id >= 0) {
-          if (down.button === 2 || mark) flag(game.current, id);
-          else if (down.button === 0) reveal(game.current, id);
-          update((v) => v + 1);
-        }
-      }
-      down = null;
+      const [x, y] = pos(e);
+      gestures.up(e.pointerId, x, y);
       draw();
     };
     const cancel = () => {
-      down = null;
+      gestures.cancel();
+      hovered = -1;
+      draw();
+    };
+    const lostCapture = (e: PointerEvent) => {
+      if (gestures.has(e.pointerId)) cancel();
     };
     const leave = () => {
       hovered = -1;
@@ -208,9 +252,8 @@ export default function Home() {
     const menu = (e: Event) => e.preventDefault();
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
-      view.current.zoom = Math.max(
-        0.55,
-        Math.min(1.7, view.current.zoom * Math.exp(-e.deltaY * 0.001)),
+      view.current.zoom = clampZoom(
+        view.current.zoom * Math.exp(-e.deltaY * 0.001),
       );
       draw();
     };
@@ -226,10 +269,14 @@ export default function Home() {
           e.key === 'ArrowLeft' ? -0.15 : e.key === 'ArrowRight' ? 0.15 : 0,
           e.key === 'ArrowUp' ? -0.15 : e.key === 'ArrowDown' ? 0.15 : 0,
         );
+        view.current.rotation = rotateView(
+          view.current.rotation,
+          e.key === 'ArrowLeft' ? -0.15 : e.key === 'ArrowRight' ? 0.15 : 0,
+          e.key === 'ArrowUp' ? -0.15 : e.key === 'ArrowDown' ? 0.15 : 0,
+        );
         if (e.key === '+' || e.key === '-')
-          view.current.zoom = Math.max(
-            0.55,
-            Math.min(1.7, view.current.zoom + (e.key === '+' ? 0.1 : -0.1)),
+          view.current.zoom = clampZoom(
+            view.current.zoom + (e.key === '+' ? 0.1 : -0.1),
           );
         draw();
       }
@@ -238,6 +285,9 @@ export default function Home() {
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', cancel);
+    el.addEventListener('lostpointercapture', lostCapture);
+    window.addEventListener('blur', cancel);
+    document.addEventListener('visibilitychange', cancel);
     el.addEventListener('pointerleave', leave);
     el.addEventListener('contextmenu', menu);
     el.addEventListener('wheel', wheel, { passive: false });
@@ -246,6 +296,10 @@ export default function Home() {
     ro.observe(el);
     draw();
     return () => {
+      gestures.cancel();
+      window.removeEventListener('blur', cancel);
+      document.removeEventListener('visibilitychange', cancel);
+      el.removeEventListener('lostpointercapture', lostCapture);
       ro.disconnect();
       el.removeEventListener('pointerdown', start);
       el.removeEventListener('pointermove', move);
@@ -256,7 +310,7 @@ export default function Home() {
       el.removeEventListener('wheel', wheel);
       el.removeEventListener('keydown', key);
     };
-  }, [mark]);
+  }, []);
   useEffect(() => {
     drawRef.current();
   }, [revision]);
@@ -264,7 +318,7 @@ export default function Home() {
     cleared = b.cells.filter((c) => c.revealed && !c.mine).length,
     flags = b.cells.filter((c) => c.flagged).length;
   return (
-    <main>
+    <main className={mobile ? `mobile step-${step}` : undefined}>
       <header>
         <a className="brand" href="./">
           ◈ <span>SURFACE</span>
@@ -275,65 +329,116 @@ export default function Home() {
         </button>
       </header>
       <div className="workspace">
-        <aside>
-          <div className="eyebrow">01 / CONFIGURATION</div>
-          <h1>
-            A new dimension
-            <br />
-            of deduction.
-          </h1>
-          <p className="intro">Find the mines. Read the surface.</p>
-          <div className="section-label">Choose your surface</div>
-          <RadioGroup
-            value={shape}
-            onValueChange={(v) => {
-              setShape(String(v));
-              reset(String(v));
-            }}
-            className="shape-options"
-            aria-label="Board shape"
-          >
-            {[
-              ['torus', '◎', 'Torus', 'Connected square grid'],
-              ['icosahedron', '◇', 'Icosahedron', 'Triangular terrain'],
-            ].map(([id, icon, title, sub]) => (
-              <label
-                className={'shape-option ' + (shape === id ? 'selected' : '')}
-                key={id}
-              >
-                <span className="shape-icon">{icon}</span>
-                <span>
-                  <strong>{title}</strong>
-                  <small>{sub}</small>
-                </span>
-                <RadioGroupItem value={id} />
-              </label>
-            ))}
-          </RadioGroup>
-          <div className="section-label">Mine density</div>
-          <RadioGroup
-            value={String(density)}
-            onValueChange={(v) => {
-              setDensity(Number(v));
-              reset(shape, Number(v));
-            }}
-            className="difficulties"
-            aria-label="Difficulty"
-          >
-            {[
-              [0.1, 'Easy'],
-              [0.14, 'Normal'],
-              [0.2, 'Hard'],
-            ].map(([v, t]) => (
-              <label key={v} className={density === v ? 'active' : ''}>
-                <RadioGroupItem value={String(v)} />
-                {t}
-              </label>
-            ))}
-          </RadioGroup>
-          <button className="new-game" onClick={() => reset()}>
-            New game <span>↻</span>
-          </button>
+        <aside aria-label="Game setup">
+          {mobile && (
+            <div className="wizard-heading">
+              <span className="eyebrow">
+                {step === 0 ? '01 / SURFACE' : '02 / COMPLEXITY'}
+              </span>
+              <h1>
+                {step === 0
+                  ? 'Choose your surface.'
+                  : 'Make it your challenge.'}
+              </h1>
+              {hasSession && (
+                <button
+                  className="quiet"
+                  onClick={() => {
+                    setShape(session.current.shape);
+                    setDensity(session.current.density);
+                    setStep(2);
+                  }}
+                >
+                  Resume game ↗
+                </button>
+              )}
+            </div>
+          )}
+          <div className="desktop-intro">
+            <div className="eyebrow">01 / CONFIGURATION</div>
+            <h1>
+              A new dimension
+              <br />
+              of deduction.
+            </h1>
+            <p className="intro">Find the mines. Read the surface.</p>
+          </div>
+          <div className="surface-step">
+            <div className="section-label">Choose your surface</div>
+            <RadioGroup
+              value={shape}
+              onValueChange={(v) => {
+                setShape(String(v));
+                if (!mobile) reset(String(v));
+                savePreferences(String(v), density);
+              }}
+              className="shape-options"
+              aria-label="Board shape"
+            >
+              {[
+                ['torus', '◎', 'Torus', 'Connected square grid'],
+                ['icosahedron', '◇', 'Icosahedron', 'Triangular terrain'],
+              ].map(([id, icon, title, sub]) => (
+                <label
+                  className={'shape-option ' + (shape === id ? 'selected' : '')}
+                  key={id}
+                >
+                  <span className="shape-icon">{icon}</span>
+                  <span>
+                    <strong>{title}</strong>
+                    <small>{sub}</small>
+                  </span>
+                  <RadioGroupItem value={id} />
+                </label>
+              ))}
+            </RadioGroup>
+          </div>
+          {mobile && step === 0 && (
+            <button className="new-game" onClick={() => setStep(1)}>
+              Continue <span>→</span>
+            </button>
+          )}
+          <div className="density-step">
+            <div className="section-label">Mine density</div>
+            <RadioGroup
+              value={String(density)}
+              onValueChange={(v) => {
+                setDensity(Number(v));
+                if (!mobile) reset(shape, Number(v));
+                savePreferences(shape, Number(v));
+              }}
+              className="difficulties"
+              aria-label="Difficulty"
+            >
+              {[
+                [0.1, 'Easy'],
+                [0.14, 'Normal'],
+                [0.2, 'Hard'],
+              ].map(([v, t]) => (
+                <label key={v} className={density === v ? 'active' : ''}>
+                  <RadioGroupItem value={String(v)} />
+                  {t}
+                </label>
+              ))}
+            </RadioGroup>
+            {mobile && (
+              <button className="quiet wizard-back" onClick={() => setStep(0)}>
+                ← Surface
+              </button>
+            )}
+            <button
+              className="new-game"
+              onClick={() => {
+                reset();
+                view.current = { rotation: initialRotation(), zoom: 1 };
+                setHasSession(true);
+                setStep(2);
+                setHelp(false);
+              }}
+            >
+              New game <span>↻</span>
+            </button>
+          </div>
           <div className="safe-note">
             <span>✧</span> Your first reveal is always safe.
           </div>
@@ -352,6 +457,28 @@ export default function Home() {
           </div>
         </aside>
         <section className="play-area" aria-label="Minesweeper game">
+          {mobile && (
+            <div className="mobile-tools">
+              <button
+                aria-label="Game settings"
+                onClick={() => {
+                  setShape(session.current.shape);
+                  setDensity(session.current.density);
+                  setStep(0);
+                  setHelp(false);
+                }}
+              >
+                ☰
+              </button>
+              <button
+                aria-label={help ? 'Close guide' : 'How to play'}
+                aria-expanded={help}
+                onClick={() => setHelp(!help)}
+              >
+                ?
+              </button>
+            </div>
+          )}
           <div className="game-top">
             <div className="live-label">
               <i />{' '}
@@ -380,12 +507,28 @@ export default function Home() {
           <canvas
             ref={canvas}
             tabIndex={0}
-            aria-label="3D minesweeper surface. Click to reveal, right click to flag, drag to rotate, scroll to zoom. Arrow keys rotate."
+            aria-label="3D minesweeper surface. Tap to reveal, hold or right click to flag, drag to rotate, pinch or scroll to zoom. Arrow keys rotate."
           />
+          {mobile && hint && (
+            <div className="touch-hint">
+              <span>
+                Tap to reveal · Hold to flag
+                <br />
+                Drag to rotate · Pinch to zoom
+              </span>
+              <button
+                aria-label="Dismiss touch tips"
+                onClick={() => setHint(false)}
+              >
+                ×
+              </button>
+            </div>
+          )}
           <div className="surface-caption">
             <span>{shape === 'torus' ? '01 / TORUS' : '02 / ICOSAHEDRON'}</span>
             <button
               onClick={() => {
+                view.current = { rotation: initialRotation(), zoom: 1 };
                 view.current = { rotation: initialRotation(), zoom: 1 };
                 drawRef.current();
               }}
@@ -416,14 +559,16 @@ export default function Home() {
                 that share an edge or a corner. Empty areas open automatically.
               </p>
               <p>
-                Numbers highlight blue on hover when touching flags match their value.
-                Click to reveal all their unflagged neighbors. Misplaced flags
-                can expose a mine. Too few or too many flags disable this move.
+                Numbers highlight blue on hover when touching flags match their
+                value. Click to reveal all their unflagged neighbors. Misplaced
+                flags can expose a mine. Too few or too many flags disable this
+                move.
               </p>
               <p>
                 Right-click a cell to flag a suspected mine. Drag in any
                 direction to see the other side; scroll to zoom. On touch
-                screens, use Flag mode to place markers.
+                screens, hold a cell to add or remove a flag. Pinch with two
+                fingers to zoom; lift both fingers before rotating again.
               </p>
               <p>
                 Your first reveal and its neighbors contain no mines. Later
@@ -446,13 +591,6 @@ export default function Home() {
                 }}
               />
             </div>
-            <button
-              className={'flag-mode ' + (mark ? 'on' : '')}
-              aria-pressed={mark}
-              onClick={() => setMark(!mark)}
-            >
-              ⚑ Flag mode {mark ? 'on' : 'off'}
-            </button>
           </div>
         </section>
       </div>
