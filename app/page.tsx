@@ -344,21 +344,15 @@ export default function Home() {
         <aside aria-label="Game setup">
           {mobile && (
             <div className="wizard-heading">
-              <span className="eyebrow">
-                {step === 0 ? '01 / SURFACE' : '02 / COMPLEXITY'}
-              </span>
-              <h1>
-                {step === 0
-                  ? 'Choose your surface.'
-                  : 'Make it your challenge.'}
-              </h1>
+              <span className="eyebrow">01 / SETUP</span>
+              <h1>Set up your game.</h1>
               {hasSession && (
                 <button
                   className="quiet"
                   onClick={() => {
                     setShape(session.current.shape);
                     setDensity(session.current.density);
-                    setStep(2);
+                    setStep(1);
                   }}
                 >
                   Resume game ↗
@@ -405,11 +399,6 @@ export default function Home() {
               ))}
             </RadioGroup>
           </div>
-          {mobile && step === 0 && (
-            <button className="new-game" onClick={() => setStep(1)}>
-              Continue <span>→</span>
-            </button>
-          )}
           <div className="density-step">
             <div className="section-label">Mine density</div>
             <RadioGroup
@@ -433,18 +422,13 @@ export default function Home() {
                 </label>
               ))}
             </RadioGroup>
-            {mobile && (
-              <button className="quiet wizard-back" onClick={() => setStep(0)}>
-                ← Surface
-              </button>
-            )}
             <button
               className="new-game"
               onClick={() => {
                 reset();
                 view.current = { rotation: initialRotation(), zoom: 1 };
                 setHasSession(true);
-                setStep(2);
+                setStep(1);
                 setHelp(false);
               }}
             >

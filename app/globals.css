@@ -72,28 +72,20 @@
 .mobile .safe-note {
   display: flex;
 }
-.mobile .wizard-back {
-  margin-top: 20px;
-  min-height: 44px;
-}
-.mobile.step-0 .density-step,
-.mobile.step-1 .surface-step {
+.mobile:not(.step-1) .play-area {
   display: none;
 }
-.mobile:not(.step-2) .play-area {
+.mobile.step-1 aside {
   display: none;
 }
-.mobile.step-2 aside {
-  display: none;
-}
-.mobile.step-2 {
+.mobile.step-1 {
   position: fixed;
   inset: 0;
   height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
 }
-.mobile.step-2 .workspace {
+.mobile.step-1 .workspace {
   height: 100%;
   min-height: 0;
 }
