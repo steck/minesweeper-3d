@@ -34,7 +34,8 @@ function savePreferences(shape: string, density: number) {
 
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const game = useRef<Board>(makeBoard('torus', 0.14));
+  const [initialBoard] = useState(() => makeBoard('torus', 0.14));
+  const game = useRef<Board>(initialBoard);
   const session = useRef({ shape: 'torus', density: 0.14 });
   const view = useRef({ rotation: initialRotation(), zoom: 1 });
   const [shape, setShape] = useState('torus');
@@ -93,13 +94,20 @@ export default function Home() {
     const ctx = el.getContext('2d')!;
     let hovered = -1;
     let faces: { id: number; points: number[][]; z: number }[] = [];
-    const draw = () => {
+    let pendingFrame: number | null = null;
+    const render = () => {
       const w = el.clientWidth,
         h = el.clientHeight,
         dpr = Math.min(devicePixelRatio, 2);
-      el.width = w * dpr;
-      el.height = h * dpr;
-      ctx.scale(dpr, dpr);
+      if (!w || !h) return;
+      const pixelWidth = Math.round(w * dpr),
+        pixelHeight = Math.round(h * dpr);
+      // Resizing clears the context and reallocates its backing buffer.
+      if (el.width !== pixelWidth || el.height !== pixelHeight) {
+        el.width = pixelWidth;
+        el.height = pixelHeight;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       const scale = Math.min(w * 0.36, h * 0.36) * view.current.zoom;
       faces = game.current.cells
@@ -119,8 +127,7 @@ export default function Home() {
         .sort((a, b) => a.z - b.z);
       for (const f of faces) {
         const c = game.current.cells[f.id];
-        const chordReady = canChord(game.current, f.id);
-        const chordHovered = chordReady && f.id === hovered;
+        const chordHovered = f.id === hovered && canChord(game.current, f.id);
         const pts = f.points;
         const light = Math.max(0, Math.min(1, (f.z + 1.5) / 3));
         ctx.beginPath();
@@ -173,6 +180,14 @@ export default function Home() {
           }
         }
       }
+    };
+    // Apply every movement to the camera, but paint only the latest view per frame.
+    const draw = () => {
+      if (pendingFrame !== null) return;
+      pendingFrame = requestAnimationFrame(() => {
+        pendingFrame = null;
+        render();
+      });
     };
     drawRef.current = draw;
     const hit = (x: number, y: number) => {
@@ -269,11 +284,6 @@ export default function Home() {
           e.key === 'ArrowLeft' ? -0.15 : e.key === 'ArrowRight' ? 0.15 : 0,
           e.key === 'ArrowUp' ? -0.15 : e.key === 'ArrowDown' ? 0.15 : 0,
         );
-        view.current.rotation = rotateView(
-          view.current.rotation,
-          e.key === 'ArrowLeft' ? -0.15 : e.key === 'ArrowRight' ? 0.15 : 0,
-          e.key === 'ArrowUp' ? -0.15 : e.key === 'ArrowDown' ? 0.15 : 0,
-        );
         if (e.key === '+' || e.key === '-')
           view.current.zoom = clampZoom(
             view.current.zoom + (e.key === '+' ? 0.1 : -0.1),
@@ -296,6 +306,8 @@ export default function Home() {
     ro.observe(el);
     draw();
     return () => {
+      if (pendingFrame !== null) cancelAnimationFrame(pendingFrame);
+      drawRef.current = () => {};
       gestures.cancel();
       window.removeEventListener('blur', cancel);
       document.removeEventListener('visibilitychange', cancel);

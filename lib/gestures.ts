@@ -51,7 +51,7 @@ export function createGestures(actions: Actions) {
         timer = setTimeout(() => {
           mode = 'held';
           actions.flag(cell);
-        }, 450);
+        }, 200);
     },
     move(id: number, x: number, y: number) {
       const contact = contacts.get(id);

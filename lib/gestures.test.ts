@@ -30,7 +30,7 @@ void test('hold flags exactly once and release never reveals', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const { gestures: g, calls } = setup();
   g.down(1, 10, 10, 0, true);
-  t.mock.timers.tick(449);
+  t.mock.timers.tick(199);
   assert.deepEqual(calls, []);
   t.mock.timers.tick(1);
   t.mock.timers.tick(1000);
