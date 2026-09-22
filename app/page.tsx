@@ -14,7 +14,8 @@ function loadPreferences() {
     if (!saved) return null;
     const preferences = JSON.parse(saved);
     return {
-      shape: preferences?.shape === 'icosahedron' ? 'icosahedron' : 'torus',
+      shape: ['torus', 'icosahedron', 'heart'].includes(preferences?.shape)
+        ? preferences.shape : 'torus',
       density: [0.1, 0.14, 0.2].includes(preferences?.density)
         ? preferences.density
         : 0.14,
@@ -58,6 +59,8 @@ export default function Home() {
   const [help, setHelp] = useState(false);
   const drawRef = useRef<() => void>(() => {});
   const reset = (s = shape, d = density) => {
+    if (session.current.shape !== s)
+      view.current = { rotation: initialRotation(s), zoom: 1 };
     session.current = { shape: s, density: d };
     game.current = makeBoard(s, d);
     setSeconds(0);
@@ -384,6 +387,7 @@ export default function Home() {
               {[
                 ['torus', '◎', 'Torus', 'Connected square grid'],
                 ['icosahedron', '◇', 'Icosahedron', 'Triangular terrain'],
+                ['heart', '♡', 'Heart', 'Triangles & quadrilaterals'],
               ].map(([id, icon, title, sub]) => (
                 <label
                   className={'shape-option ' + (shape === id ? 'selected' : '')}
@@ -426,7 +430,7 @@ export default function Home() {
               className="new-game"
               onClick={() => {
                 reset();
-                view.current = { rotation: initialRotation(), zoom: 1 };
+                view.current = { rotation: initialRotation(session.current.shape), zoom: 1 };
                 setHasSession(true);
                 setStep(1);
                 setHelp(false);
@@ -442,13 +446,15 @@ export default function Home() {
             <span>TOPOLOGY</span>
             <strong>
               {b.cells.length}{' '}
-              {shape === 'torus' ? 'quadrilateral' : 'equilateral triangle'}{' '}
+              {shape === 'torus' ? 'quadrilateral' : shape === 'heart' ? 'mixed' : 'equilateral triangle'}{' '}
               cells
             </strong>
             <p>
               {shape === 'torus'
                 ? 'An endless grid. Neighbors wrap around both directions.'
-                : 'Twenty faces. Neighbors connect across every seam.'}
+                : shape === 'heart'
+                  ? 'A faceted heart. Triangles and quadrilaterals meet across a continuous surface.'
+                  : 'Twenty faces. Neighbors connect across every seam.'}
             </p>
           </div>
         </aside>
@@ -521,11 +527,10 @@ export default function Home() {
             </div>
           )}
           <div className="surface-caption">
-            <span>{shape === 'torus' ? '01 / TORUS' : '02 / ICOSAHEDRON'}</span>
+            <span>{shape === 'torus' ? '01 / TORUS' : shape === 'heart' ? '03 / HEART' : '02 / ICOSAHEDRON'}</span>
             <button
               onClick={() => {
-                view.current = { rotation: initialRotation(), zoom: 1 };
-                view.current = { rotation: initialRotation(), zoom: 1 };
+                view.current = { rotation: initialRotation(session.current.shape), zoom: 1 };
                 drawRef.current();
               }}
             >

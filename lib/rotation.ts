@@ -21,7 +21,8 @@ export function rotateView(rotation: Rotation, horizontal: number, vertical: num
   return next.map((value) => value / length) as Rotation;
 }
 
-export function initialRotation(): Rotation {
+export function initialRotation(shape = 'torus'): Rotation {
+  if (shape === 'heart') return multiply(aroundX(-0.08), aroundY(0.12));
   return multiply(aroundX(0.85), aroundY(0.25));
 }
 

@@ -1,3 +1,5 @@
+import { heartPoints, heartFaces, heartRim } from './heart-mesh.ts';
+
 export type Vec = [number, number, number];
 export type Cell = {
   vertices: Vec[];
@@ -13,9 +15,42 @@ export type Board = {
   status: 'ready' | 'playing' | 'won' | 'lost';
   started: number;
 };
+
+// Equal-spaced front/back patches join through two rows of rectangular side
+// cells. The rim has finite thickness, so no facets collapse into a sharp seam.
+function heartPolygons(): Vec[][] {
+  const rim = heartRim.map(i => heartPoints[i]);
+  const distanceToRim = ([x, y]: number[]) => Math.min(...rim.map((a, i) => {
+    const b = rim[(i + 1) % rim.length];
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1,
+      ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+  }));
+  const rimIds = new Set(heartRim);
+  const front: Vec[] = heartPoints.map(([x, y], i) => [x, y,
+    0.16 + (rimIds.has(i) ? 0 : 0.22 * Math.sin(Math.min(1, distanceToRim([x, y]) / 0.65) * Math.PI / 2)),
+  ]);
+  const back: Vec[] = front.map(([x, y, z]) => [x, y, -z]);
+  const polygons = heartFaces.flatMap(face => [
+    face.map(i => front[i]),
+    [...face].reverse().map(i => back[i]),
+  ]);
+  for (let i = 0; i < heartRim.length; i++) {
+    const a = heartRim[i], b = heartRim[(i + 1) % heartRim.length];
+    const middleA: Vec = [front[a][0], front[a][1], 0];
+    const middleB: Vec = [front[b][0], front[b][1], 0];
+    polygons.push([front[b], middleB, middleA, front[a]],
+      [middleB, back[b], back[a], middleA]);
+  }
+  return polygons;
+}
+
 export function makeBoard(shape: string, density: number): Board {
   const polygons: Vec[][] = [];
-  if (shape === 'torus') {
+  if (shape === 'heart') {
+    polygons.push(...heartPolygons());
+  } else if (shape === 'torus') {
     const u = 24,
       v = 12;
     const point = (i: number, j: number): Vec => {
