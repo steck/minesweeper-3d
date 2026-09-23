@@ -13,6 +13,11 @@ export function createRestartGuard(now = () => performance.now()) {
     cancel() {
       pressed = false;
     },
+    leave(buttons: number) {
+      // Touch/pen pointers leave when lifted, before the compatibility click.
+      // Only leaving while still pressed means the press was abandoned.
+      if (buttons !== 0) pressed = false;
+    },
     activate(detail: number, pointerType = '') {
       const intentional = pressed || (detail === 0 && pointerType === '');
       pressed = false;

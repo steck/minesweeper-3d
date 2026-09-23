@@ -17,7 +17,7 @@ export function RestartButton({ onRestart }: { onRestart: () => void }) {
       disabled={!ready}
       onPointerDown={() => guard.press()}
       onPointerCancel={() => guard.cancel()}
-      onPointerLeave={() => guard.cancel()}
+      onPointerLeave={(event) => guard.leave(event.buttons)}
       onBlur={() => guard.cancel()}
       onClick={(event) => {
         const native = event.nativeEvent as PointerEvent;
