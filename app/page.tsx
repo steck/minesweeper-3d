@@ -5,6 +5,7 @@ import { makeBoard, reveal, flag, canChord, type Board } from '@/lib/game';
 import { initialRotation, rotatePoint, rotateView } from '@/lib/rotation';
 import { createGestures, clampZoom } from '@/lib/gestures';
 import { registerGameTools } from '@/lib/webmcp';
+import { RestartButton } from '@/components/restart-button';
 
 const preferencesKey = 'surface-minesweeper.preferences';
 
@@ -549,7 +550,7 @@ export default function Home() {
                   ? 'Every safe cell revealed.'
                   : 'Rotate to inspect the board, or try a new field.'}
               </span>
-              <button onClick={() => reset()}>Play again ↗</button>
+              <RestartButton onRestart={() => reset()} />
             </div>
           )}
           {help && (
