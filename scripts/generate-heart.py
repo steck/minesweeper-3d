@@ -85,6 +85,15 @@ rim=list(range(len(outline)))+[mirror[i] for i in range(len(outline)-2,0,-1)]
 faces.append([mirror[1], 0, 1])
 rim.remove(0)
 vertices[0][1] -= 0.04 # Give the new front/back triangles comfortable area.
+# One broad kite at the bottom is easier to reveal than two narrow triangles.
+tip = len(outline) - 1
+tip_faces = [f for f in faces if tip in f]
+assert len(tip_faces) == 2 and all(len(f) == 3 for f in tip_faces)
+tip_quad = sorted(set(tip_faces[0] + tip_faces[1]))
+assert len(tip_quad) == 4
+center = np.array([vertices[i] for i in tip_quad]).mean(axis=0)
+tip_quad.sort(key=lambda i: np.arctan2(vertices[i][1] - center[1], vertices[i][0] - center[0]))
+faces = [f for f in faces if tip not in f] + [tip_quad]
 # Each interior edge occurs twice; the outline is the only open boundary.
 edges={}
 for f in faces:

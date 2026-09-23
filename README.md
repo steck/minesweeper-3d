@@ -14,7 +14,7 @@ A React and TypeScript game with a lightweight Canvas perspective renderer. Run 
 
 - Torus: 24 × 12 quadrilateral cells, periodic in both directions.
 - Icosahedron: each of 20 faces subdivided into 16 equilateral triangles (320 cells).
-- Heart: a closed, symmetric gem with 86 triangles and 94 quadrilaterals (180 cells). Evenly spaced face cells meet a continuous, two-row rectangular belt. Cell surface areas vary by less than 2.8×.
+- Heart: a closed, symmetric gem with 82 triangles and 96 quadrilaterals (178 cells). Evenly spaced face cells meet a continuous, two-row rectangular belt. Cell surface areas vary by less than 2.8×.
 - Cells sharing a vertex are neighbors. Adjacency is deduplicated across all seams.
 - The first reveal and its neighborhood are safe. Empty regions flood open. Reveal every non-mine cell to win.
 - Left click reveals, right click toggles flags, drag rotates, wheel zooms. Arrow keys rotate and +/− zoom. Flag mode supports touch interaction.

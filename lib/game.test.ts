@@ -45,7 +45,7 @@ for (const shape of ['torus', 'icosahedron', 'heart']) {
   });
   test(`${shape}: closed mesh, symmetric adjacency, and expected cell geometry`, () => {
     const b = makeBoard(shape, 0.14);
-    assert.equal(b.cells.length, shape === 'torus' ? 288 : shape === 'heart' ? 180 : 320);
+    assert.equal(b.cells.length, shape === 'torus' ? 288 : shape === 'heart' ? 178 : 320);
     const edges = new Map<string, number>();
     b.cells.forEach((c, i) => {
       assert.equal(new Set(c.neighbors).size, c.neighbors.length);
@@ -113,8 +113,8 @@ for (const shape of ['torus', 'icosahedron', 'heart']) {
 
 void test('heart: balanced mixed facets, symmetry, and nondegenerate convex cells', () => {
   const { cells } = makeBoard('heart', 0.14);
-  assert.equal(cells.filter(c => c.vertices.length === 3).length, 86);
-  assert.equal(cells.filter(c => c.vertices.length === 4).length, 94);
+  assert.equal(cells.filter(c => c.vertices.length === 3).length, 82);
+  assert.equal(cells.filter(c => c.vertices.length === 4).length, 96);
   const key = (v: number[]) => v.map(x => Math.round(x * 1e6)).join(',');
   const vertices = new Set(cells.flatMap(c => c.vertices.map(key)));
   for (const c of cells) {
